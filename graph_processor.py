@@ -526,5 +526,12 @@ class GraphProcessor:
         except Exception as e:
             self.logger.error(f"Error loading graph: {str(e)}")
             raise
+    def visualize_emotion_graph(self):
+        """Visualize the emotion graph"""
+        plt.figure(figsize=(12, 8))
+        pos = nx.spring_layout(self.emotion_graph)
+        nx.draw(self.emotion_graph, pos, with_labels=True, node_color='lightblue', edge_color='gray', font_size=10)
+        plt.title("Emotion Graph")
+        plt.show()
 
     
