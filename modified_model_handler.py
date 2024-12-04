@@ -215,42 +215,6 @@ class ModelHandler:
                 'confidence': 0.0
             }
 
-    # def _parse_emotion_response(self, response: str) -> Dict:
-    #     try:
-    #         # First split the response at "Response:" to get only the model's output
-    #         if "Response:" in response:
-    #             actual_response = response.split("Response:")[-1].strip().lower()
-    #         else:
-    #             actual_response = response.lower()
-    #
-    #         # Now match emotion and cause from the actual response
-    #         emotion_match = re.search(r"emotion:\s*([^\n]+)", actual_response, re.IGNORECASE)
-    #         cause_match = re.search(r"cause:\s*([^\n]+)", actual_response, re.IGNORECASE)
-    #
-    #         # Extract emotion and cause
-    #         emotion = emotion_match.group(1).strip() if emotion_match else 'neutral'
-    #         cause = cause_match.group(1).strip() if cause_match else 'unclear'
-    #
-    #         # Clean up any remaining brackets
-    #         emotion = emotion.replace('[', '').replace(']', '').strip()
-    #         cause = cause.replace('[', '').replace(']', '').strip()
-    #
-    #         self.logger.debug(f"Extracted emotion: {emotion}")
-    #         self.logger.debug(f"Extracted cause: {cause}")
-    #
-    #         return {
-    #             'emotion': emotion,
-    #             'cause': cause,
-    #             'confidence': 1.0 if emotion != 'neutral' else 0.0
-    #         }
-    #
-    #     except Exception as e:
-    #         self.logger.error(f"Error parsing emotion response: {str(e)}")
-    #         return {
-    #             'emotion': 'neutral',
-    #             'cause': 'unclear',
-    #             'confidence': 0.0
-    #         }
     def select_response(self, message: str, emotion_data: Dict, responses: List[Dict], selected_idx: int) -> None:
         selected_response = responses[selected_idx]
 
@@ -502,11 +466,6 @@ class ModelHandler:
                 conversation_history
             )
 
-            # # Save conversation
-            # if responses:
-            #     self.conversation_manager.add_exchange(text, emotion_data, responses[0]['text'])
-
-            # Save graph state periodically
             if self.graph_processor.should_save():
                 self.graph_processor.save_graph()
 
