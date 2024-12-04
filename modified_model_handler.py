@@ -130,3 +130,393 @@ class ModelHandler:
                 'cause': 'unclear',
                 'confidence': 0.0
             }
+
+     def generate_responses(self, text: str, emotion_data: Dict, graph_insights: Dict, conversation_history: str = "") -> List[Dict]:
+        """Task 2: Response Generation"""
+        try:
+            # Create prompt using prompt manager
+            print("=======================================================")
+            print("Generating response with:", graph_insights)
+            prompt = self.prompt_manager.create_response_generation_prompt(
+                text, emotion_data, graph_insights, conversation_history
+            )
+
+            # Tokenize and generate multiple responses
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_length=self.config['model']['max_length'],
+                    temperature=self.config['model']['temperature'],
+                    top_p=self.config['model']['top_p'],
+                    num_return_sequences=self.config['model']['num_responses'],
+                    pad_token_id=self.tokenizer.eos_token_id
+                )
+
+            # Process outputs with response styles
+            responses = []
+            for idx, output in enumerate(outputs):
+                response_text = self.tokenizer.decode(output, skip_special_tokens=True)
+                response_text = self.prompt_manager.format_response(response_text)
+
+                # Get response style from graph insights
+                styles = graph_insights.get('response_patterns', [])
+                style = styles[idx % len(styles)] if styles else "default"
+
+                responses.append({
+                    'text': response_text,
+                    'style': style,
+                    'score': 1.0
+                })
+            print("===================================================")
+            print(responses)
+            return responses
+
+        except Exception as e:
+            self.logger.error(f"Error generating responses: {str(e)}")
+            return [{'text': 'I apologize, but I am having trouble generating a response.',
+                     'style': 'error',
+                     'score': 0.0}]
+
+    import re
+
+    def _parse_emotion_response(self, response: str) -> Dict:
+        try:
+            # Get the model output portion
+            actual_response = response.split("Response:")[
+                -1].strip().lower() if "Response:" in response else response.lower()
+
+            # Extract emotion and cause
+            emotion_match = re.search(r"emotion:\s*([^\n:]+)", actual_response, re.IGNORECASE)
+            cause_match = re.search(r"cause:\s*([^\n]+)", actual_response, re.IGNORECASE)
+
+            # Take only the first word for emotion, full phrase for cause
+            emotion_full = emotion_match.group(1).strip() if emotion_match else 'neutral'
+            emotion = emotion_full.split()[0].strip('[]() ') if emotion_full != 'neutral' else 'neutral'
+
+            cause = cause_match.group(1).strip() if cause_match else 'unclear'
+            cause = cause.strip('[]() ')
+
+            self.logger.debug(f"Extracted emotion: {emotion}")
+            self.logger.debug(f"Extracted cause: {cause}")
+
+            return {
+                'emotion': emotion,
+                'cause': cause,
+                'confidence': 1.0 if emotion != 'neutral' else 0.0
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error parsing emotion response: {str(e)}")
+            return {
+                'emotion': 'neutral',
+                'cause': 'unclear',
+                'confidence': 0.0
+            }
+
+    # def _parse_emotion_response(self, response: str) -> Dict:
+    #     try:
+    #         # First split the response at "Response:" to get only the model's output
+    #         if "Response:" in response:
+    #             actual_response = response.split("Response:")[-1].strip().lower()
+    #         else:
+    #             actual_response = response.lower()
+    #
+    #         # Now match emotion and cause from the actual response
+    #         emotion_match = re.search(r"emotion:\s*([^\n]+)", actual_response, re.IGNORECASE)
+    #         cause_match = re.search(r"cause:\s*([^\n]+)", actual_response, re.IGNORECASE)
+    #
+    #         # Extract emotion and cause
+    #         emotion = emotion_match.group(1).strip() if emotion_match else 'neutral'
+    #         cause = cause_match.group(1).strip() if cause_match else 'unclear'
+    #
+    #         # Clean up any remaining brackets
+    #         emotion = emotion.replace('[', '').replace(']', '').strip()
+    #         cause = cause.replace('[', '').replace(']', '').strip()
+    #
+    #         self.logger.debug(f"Extracted emotion: {emotion}")
+    #         self.logger.debug(f"Extracted cause: {cause}")
+    #
+    #         return {
+    #             'emotion': emotion,
+    #             'cause': cause,
+    #             'confidence': 1.0 if emotion != 'neutral' else 0.0
+    #         }
+    #
+    #     except Exception as e:
+    #         self.logger.error(f"Error parsing emotion response: {str(e)}")
+    #         return {
+    #             'emotion': 'neutral',
+    #             'cause': 'unclear',
+    #             'confidence': 0.0
+    #         }
+    def select_response(self, message: str, emotion_data: Dict, responses: List[Dict], selected_idx: int) -> None:
+        selected_response = responses[selected_idx]
+
+        # Save to conversation history
+        self.conversation_manager.add_exchange(
+            message,
+            emotion_data,
+            selected_response['text']
+        )
+
+        # Save preference
+        context = {
+            'message': message,
+            'emotion_data': emotion_data
+        }
+        self.response_ranker.save_preference(context, selected_response, responses)
+
+        return selected_response
+
+    def _normalize_emotion(self, emotion: str) -> str:
+        """Normalize detected emotion to match base patterns"""
+        # Comprehensive emotion mapping
+        emotion_mapping = {
+            'excited': 'excitement',
+            'happy': 'joy',
+            'joyful': 'joy',
+            'delighted': 'joy',
+            'elated': 'joy',
+            'cheerful': 'joy',
+            'ecstatic': 'joy',
+            'giddy': 'joy',
+            'thrilled': 'joy',
+            'merry': 'joy',
+            'gleeful': 'joy',
+            'overjoyed': 'joy',
+            'euphoric': 'joy',
+            'jubilant': 'joy',
+            'blissful': 'joy',
+            'content': 'contentment',
+            'peaceful': 'contentment',
+            'serene': 'contentment',
+            'tranquil': 'contentment',
+            'relaxed': 'contentment',
+            'calm': 'contentment',
+            'satisfied': 'contentment',
+            'fulfilled': 'contentment',
+            'comfortable': 'contentment',
+            'at_ease': 'contentment',
+            'sentimental': 'sentimentality',
+            'nostalgic': 'nostalgia',
+            'melancholy': 'melancholy',
+            'wistful': 'melancholy',
+            'reflective': 'melancholy',
+            'longing': 'melancholy',
+            'sad': 'sadness',
+            'sorrowful': 'sadness',
+            'gloomy': 'sadness',
+            'depressed': 'sadness',
+            'dejected': 'sadness',
+            'downcast': 'sadness',
+            'morose': 'sadness',
+            'grief-stricken': 'sadness',
+            'heartbroken': 'sadness',
+            'devastated': 'sadness',
+            'distraught': 'sadness',
+            'despondent': 'sadness',
+            'anguished': 'sadness',
+            'miserable': 'sadness',
+            'forlorn': 'sadness',
+            'desolate': 'sadness',
+            'crestfallen': 'sadness',
+            'disheartened': 'sadness',
+            'dismal': 'sadness',
+            'mournful': 'sadness',
+            'despairing': 'sadness',
+            'blue': 'sadness',
+            'down': 'sadness',
+            'angry': 'anger',
+            'furious': 'anger',
+            'enraged': 'anger',
+            'irate': 'anger',
+            'livid': 'anger',
+            'incensed': 'anger',
+            'indignant': 'anger',
+            'outraged': 'anger',
+            'infuriated': 'anger',
+            'seething': 'anger',
+            'exasperated': 'anger',
+            'irritated': 'anger',
+            'annoyed': 'anger',
+            'vexed': 'anger',
+            'aggravated': 'anger',
+            'frustrated': 'anger',
+            'displeased': 'anger',
+            'mad': 'anger',
+            'bitter': 'anger',
+            'hostile': 'anger',
+            'hateful': 'anger',
+            'spiteful': 'anger',
+            'envenomed': 'anger',
+            'venomous': 'anger',
+            'afraid': 'fear',
+            'scared': 'fear',
+            'terrified': 'fear',
+            'petrified': 'fear',
+            'horrified': 'fear',
+            'panic-stricken': 'fear',
+            'frightened': 'fear',
+            'apprehensive': 'fear',
+            'worried': 'fear',
+            'nervous': 'fear',
+            'uneasy': 'fear',
+            'tense': 'fear',
+            'on_edge': 'fear',
+            'alarmed': 'fear',
+            'dread': 'fear',
+            'timid': 'fear',
+            'timorous': 'fear',
+            'skittish': 'fear',
+            'shy': 'fear',
+            'fearful': 'fear',
+            'spooked': 'fear',
+            'jumpy': 'fear',
+            'startled': 'surprise',
+            'astonished': 'surprise',
+            'amazed': 'surprise',
+            'shocked': 'surprise',
+            'bewildered': 'surprise',
+            'stunned': 'surprise',
+            'dumbfounded': 'surprise',
+            'flabbergasted': 'surprise',
+            'astounded': 'surprise',
+            'awestruck': 'surprise',
+            'wide-eyed': 'surprise',
+            'surprised': 'surprise',
+            'disgusted': 'disgust',
+            'revolted': 'disgust',
+            'sickened': 'disgust',
+            'nauseated': 'disgust',
+            'repulsed': 'disgust',
+            'queasy': 'disgust',
+            'appalled': 'disgust',
+            'abhorrent': 'disgust',
+            'averse': 'disgust',
+            'proud': 'pride',
+            'accomplished': 'pride',
+            'unflinching': 'confidence',
+            'poised': 'confidence',
+            'determined': 'determination',
+            'resolute': 'determination',
+            'unwavering': 'determination',
+            'steadfast': 'determination',
+            'persevering': 'determination',
+            'dedicated': 'determination',
+            'caring': 'care',
+            'compassionate': 'care',
+            'nurturing': 'care',
+            'empathetic': 'care',
+            'sympathetic': 'care',
+            'concerned': 'care',
+            'protective': 'care',
+            'supportive': 'care',
+            'loving': 'love',
+            'affectionate': 'love',
+            'adoring': 'love',
+            'infatuated': 'love',
+            'smitten': 'love',
+            'enamored': 'love',
+            'besotted': 'love',
+            'devoted': 'love',
+            'faithful': 'trust',
+            'trusting': 'trust',
+            'assured': 'trust',
+            'confident': 'trust',
+            'secure': 'trust',
+            'certain': 'trust',
+            'self-assured': 'trust',
+            'hopeful': 'hope',
+            'optimistic': 'hope',
+            'encouraged': 'hope',
+            'motivated': 'hope',
+            'inspired': 'hope',
+            'eager': 'anticipation',
+            'anticipating': 'anticipation',
+            'expectant': 'anticipation',
+            'impatient': 'anticipation',
+            'anxious': 'anticipation',
+            'prepared': 'preparedness',
+            'ready': 'preparedness',
+            'organized': 'preparedness',
+            'composed': 'preparedness',
+            'focused': 'preparedness',
+            'ashamed': 'shame',
+            'guilty': 'guilt',
+            'embarrassed': 'embarrassment',
+            'self-conscious': 'embarrassment',
+            'uncomfortable': 'embarrassment',
+            'mortified': 'embarrassment',
+            'regretful': 'regret',
+            'remorseful': 'regret',
+            'responsible': 'responsibility',
+            'lonely': 'loneliness',
+            'isolated': 'loneliness',
+            'disconnected': 'loneliness',
+            'yearning': 'loneliness',
+            'jealous': 'jealousy',
+            'envious': 'jealousy',
+            'resentful': 'jealousy',
+            'competitive': 'jealousy',
+            'insecure': 'insecurity'
+        }
+
+        # Clean the emotion string
+        emotion = emotion.lower().strip()
+
+        # Check direct match with base patterns first
+        if emotion in self.graph_processor.emotion_graph.nodes():
+            return emotion
+
+        # Try mapped emotion
+        mapped_emotion = emotion_mapping.get(emotion)
+        if mapped_emotion and mapped_emotion in self.graph_processor.emotion_graph.nodes():
+            return mapped_emotion
+
+        # Default fallback
+        return 'neutral'
+
+    @torch.no_grad()
+    def process_message(self, text: str) -> Dict:
+        """Main message processing pipeline"""
+        try:
+            # Get the conversation history if exists
+            conversation_history = self.conversation_manager.get_formatted_history()
+            # Step 1: Emotion Detection
+            emotion_data = self.detect_emotion(text, conversation_history)
+
+            # Step 2: Get graph insights
+            graph_insights = self.graph_processor.process_emotion(
+                emotion=emotion_data['emotion'],
+                cause=emotion_data['cause'],
+                context=text
+            )
+
+            # Step 3: Generate responses
+            responses = self.generate_responses(
+                text,
+                emotion_data,
+                graph_insights,
+                conversation_history
+            )
+
+            # # Save conversation
+            # if responses:
+            #     self.conversation_manager.add_exchange(text, emotion_data, responses[0]['text'])
+
+            # Save graph state periodically
+            if self.graph_processor.should_save():
+                self.graph_processor.save_graph()
+
+            return {
+                'emotion_data': emotion_data,
+                'graph_insights': graph_insights,
+                'responses': responses
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error processing message: {str(e)}")
+            raise
+
