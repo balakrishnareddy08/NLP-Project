@@ -28,7 +28,7 @@ Emotion Aware Response Generation is an advanced AI-driven conversational system
 ```bash
 # Clone the repository
 git clone https://github.com/balakrishnareddy08/NLP-Project.git
-cd EGRET
+cd Code
 
 # Create virtual environment
 python -m venv venv
@@ -51,13 +51,14 @@ streamlit run app.py
 NLP_Project/Code
 │
 ├── data/           # Datasets and preprocessing
-├── models/         # Model configurations
+├── configs/         # Model configurations
 ├── modules/        # Core system modules
 │   ├── emotion_detection/
 │   ├── graph_processor/
 │   └── response_generator/
 ├── tests/          # Unit and integration tests
 ├── interface/      # Streamlit UI
+├── utils/      # Managing Utility functions
 └── requirements.txt
 ```
 
@@ -99,7 +100,7 @@ NLP_Project/Code
    ```
 5. Open a Pull Request
 
-## 👥 Team
+## Team
 
 **Project Contributors:**
 - **Bala krishna Ragannagari**
