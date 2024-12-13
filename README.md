@@ -116,10 +116,4 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - LLaMA Model
 - Hugging Face Transformers
 
-## Contact
 
-For queries, please open an issue in the GitHub repository.
-
----
-
-**🌟 Star the project if you find it interesting!**
